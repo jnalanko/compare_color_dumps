@@ -128,16 +128,12 @@ fn read_metadata(filename: impl AsRef<Path>) -> Metadata {
         let first_token = tokens.next().unwrap();
         let second_token = tokens.next().unwrap();
 
-        if &first_token[0..11] == b"num_unitigs" {
-            num_unitigs = Some(ascii_to_int(second_token));
-        } else if &first_token[0..10] == b"num_colors" {
-            num_colors = Some(ascii_to_int(second_token));
-        } else if &first_token[0..14] == b"num_color_sets" {
-            num_color_sets = Some(ascii_to_int(second_token));
-        } else if &first_token[0..1] == b"k" {
-            k = Some(ascii_to_int(second_token));
-        } else {
-            panic!("Unknown metadata field: {}", line);
+        match first_token {
+            b"num_colors" => num_colors = Some(ascii_to_int(second_token)),
+            b"num_unitigs" => num_unitigs = Some(ascii_to_int(second_token)),
+            b"num_color_sets" => num_color_sets = Some(ascii_to_int(second_token)),
+            b"k" => k = Some(ascii_to_int(second_token)),
+            _ => panic!("Unknown metadata field: {}", line)
         }
 
         line.clear();
