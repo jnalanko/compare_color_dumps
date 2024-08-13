@@ -105,9 +105,51 @@ struct Metadata {
     k: usize
 }
 
-// Returns counts of unitigs, colors, color sets
-fn read_metadata() -> Metadata {
-    todo!();
+fn read_metadata(filename: impl AsRef<Path>) -> Metadata {
+
+    // File should look like this:
+    // num_colors=3682
+    // num_unitigs=9314735
+    // num_color_sets=5591009
+    // k=31
+
+    let mut reader = BufReader::new(File::open(filename).unwrap());
+    let mut line = String::new();
+
+    let mut num_unitigs = None;
+    let mut num_colors = None;
+    let mut num_color_sets = None;
+    let mut k = None;
+
+    while reader.read_line(&mut line).unwrap() > 0 {
+        let line_bytes = line.trim_end().as_bytes();
+        let mut tokens = line_bytes.split(|c| *c == b'=');
+
+        let first_token = tokens.next().unwrap();
+        let second_token = tokens.next().unwrap();
+
+        if &first_token[0..11] == b"num_unitigs" {
+            num_unitigs = Some(ascii_to_int(second_token));
+        } else if &first_token[0..10] == b"num_colors" {
+            num_colors = Some(ascii_to_int(second_token));
+        } else if &first_token[0..14] == b"num_color_sets" {
+            num_color_sets = Some(ascii_to_int(second_token));
+        } else if &first_token[0..1] == b"k" {
+            k = Some(ascii_to_int(second_token));
+        } else {
+            panic!("Unknown metadata field: {}", line);
+        }
+
+        line.clear();
+    }
+
+    Metadata {
+        num_unitigs: num_unitigs.expect("num_unitigs missing from metadata"),
+        num_colors: num_colors.expect("num_colors missing from metadata"),
+        num_color_sets: num_color_sets.expect("num_color_sets missing from metadata"),
+        k: k.expect("k missing from metadata")
+    }
+
 }
 
 fn main() {
@@ -117,14 +159,12 @@ fn main() {
     let dump_B_file_prefix = args.next().unwrap();
 
     eprintln!("Reading metadata...");
-    let A_metadata = read_metadata();
-    let B_metadata = read_metadata();
+    let A_metadata = read_metadata(format!("{}.metadata.txt", dump_A_file_prefix));
+    let B_metadata = read_metadata(format!("{}.metadata.txt", dump_B_file_prefix));
 
     eprintln!("Reading and canonicalizing unitigs...");
     let mut A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
     let mut B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
-
-    eprintln!("Canonicalizing unitigs...");
 
     eprintln!("Reading color sets...");
     let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
