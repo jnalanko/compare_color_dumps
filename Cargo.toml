@@ -1,0 +1,11 @@
+[package]
+name = "compare_colored_unitig_dumps"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+jseqio = "0.1.3"
+byteorder = "1.5"
