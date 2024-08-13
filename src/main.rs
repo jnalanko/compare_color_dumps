@@ -48,21 +48,66 @@ fn read_color_sets(filename: impl AsRef<Path>, num_color_sets: usize) -> Vec<Vec
     color_sets
 }
 
-// Returns unitig id if the unitig is cyclic and a cyclic rotation is found in the hashmap
-#[allow(dead_code)]
-fn check_cyclic_rotations<'a>(unitig: &[u8], k: usize, unitig_to_id: &HashMap<&[u8], usize>) -> Option<usize> {
-    if &unitig[0..k-1] == &unitig[unitig.len()-k+1..unitig.len()] {
-        // Cyclic unitig -> check rotations
-        let mut extended = unitig.to_vec();
-        for i in 0..unitig.len() {
-            extended.push(extended[k-1+i]);
-            if let Some(id) = unitig_to_id.get(&extended[1+i..]) {
-                return Some(*id);
-            }
-        }
+fn canonicalize_rotation_of_cyclic_unitig(unitig: &mut Vec<u8>, k: usize) {
 
+    assert!(unitig.len() >= k);
+
+    // Find the smallest k-mer
+    let min_kmer_start = (0..(unitig.len()-k+1)).min_by(|&i,&j| unitig[i..i+k].cmp(&unitig[j..j+k])).unwrap();
+
+    // Extend unitig so that all unitig rotations are substrings of it
+    let original_unitig_len = unitig.len();
+    for i in 0..original_unitig_len {
+        unitig.push(unitig[k-1+i]);
     }
-    None
+
+    // Shift the smallest rotation to the start
+    for i in 0..original_unitig_len {
+        unitig[i] = unitig[min_kmer_start + i];
+    }
+    unitig.truncate(original_unitig_len);
+
+}
+
+fn canonicalize_unitig(unitig: &mut Vec<u8>, k: usize) {
+    if unitig[0..k-1] == unitig[unitig.len()-(k-1) ..] {
+        // Cyclic unitig
+        canonicalize_rotation_of_cyclic_unitig(unitig, k);
+    }
+
+    let rc = jseqio::reverse_complement(unitig);
+    if rc < *unitig {
+        jseqio::reverse_complement_in_place(unitig);
+    }
+} 
+
+fn read_and_canonicalize_unitigs(filename: impl AsRef<Path>, k: usize) -> SeqDB {
+    let mut reader = jseqio::reader::DynamicFastXReader::from_file(&filename).unwrap();
+    let mut db = jseqio::seq_db::SeqDB::new();
+
+    while let Some(rec) = reader.read_next().unwrap() {
+        assert!(rec.seq.len() >= k);
+
+        let mut rec = rec.to_owned();
+        canonicalize_unitig(&mut rec.seq, k);
+        db.push_record(rec);
+    }
+
+    db
+
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct Metadata {
+    num_unitigs: usize,
+    num_colors: usize,
+    num_color_sets: usize,
+    k: usize
+}
+
+// Returns counts of unitigs, colors, color sets
+fn read_metadata() -> Metadata {
+    todo!();
 }
 
 fn main() {
@@ -71,5 +116,18 @@ fn main() {
     let dump_A_file_prefix = args.next().unwrap();
     let dump_B_file_prefix = args.next().unwrap();
 
+    eprintln!("Reading metadata...");
+    let A_metadata = read_metadata();
+    let B_metadata = read_metadata();
+
+    eprintln!("Reading and canonicalizing unitigs...");
+    let mut A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
+    let mut B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
+
+    eprintln!("Canonicalizing unitigs...");
+
+    eprintln!("Reading color sets...");
+    let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
+    let B_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_B_file_prefix), B_metadata.num_color_sets);
 
 }
