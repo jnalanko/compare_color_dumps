@@ -164,7 +164,8 @@ fn xor_into<const N: usize>(target: &mut[u8; N], other: &[u8; N]) {
 }
 
 // This should only be called for odd k because otherwise the rev. comp. of a k-mer may be equal to itself
-fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> [u8; 20] {
+// Also returns the number of k-mers that were hashed.
+fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> ([u8; 20], usize) {
     let S = unitig.to_vec();
     let Srev = reverse_complement(unitig);
 
@@ -174,6 +175,7 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> [u8; 
     assert!(k % 2 == 1); // Only works for odd k
 
     let mut checksum = [0_u8; 20];
+    let mut n_hashes = 0_usize;
 
     for i in 0..(n-k+1) {
         let fw = &S[i..i+k];
@@ -188,9 +190,28 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> [u8; 
         };
 
         xor_into(&mut checksum, &hash);
+
+        n_hashes += 1;
+
     }
 
-    checksum
+    (checksum, n_hashes)
+}
+
+fn checksum_unitig_db(unitigs: &SeqDB, k: usize, ignore_non_canonical: bool) -> ([u8; 20], usize) {
+    let mut checksum = [0_u8; 20];
+    let mut n_hashed = 0_usize;
+
+    let bar = indicatif::ProgressBar::new(unitigs.sequence_count() as u64);
+    for unitig in unitigs.iter() {
+        bar.inc(1);
+        let (unitig_checksum, hash_count) = unitig_checksum(&unitig.seq, k, ignore_non_canonical);
+        xor_into(&mut checksum, &unitig_checksum);
+        n_hashed += hash_count;
+    }
+    bar.finish();
+
+    (checksum, n_hashed)
 }
 
 fn main() {
@@ -208,25 +229,15 @@ fn main() {
     let B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
 
     eprintln!("Computing k-mer checksums...");
-    let mut A_checksum = [0_u8; 20];
-    let mut B_checksum = [0_u8; 20];
 
-    let A_bar = indicatif::ProgressBar::new(A_unitigs.sequence_count() as u64);
-    for unitig in A_unitigs.iter() {
-        A_bar.inc(1);
-        xor_into(&mut A_checksum, &unitig_checksum(unitig.seq, A_metadata.k, true));
-    }
-    A_bar.finish();
+    let (A_checksum, A_kmer_count) = &checksum_unitig_db(&A_unitigs, A_metadata.k, true);
+    let (B_checksum, B_kmer_count) = &checksum_unitig_db(&B_unitigs, B_metadata.k, false);
 
-
-    let B_bar = indicatif::ProgressBar::new(B_unitigs.sequence_count() as u64);
-    for unitig in B_unitigs.iter() {
-        B_bar.inc(1);
-        xor_into(&mut B_checksum, &unitig_checksum(unitig.seq, B_metadata.k, false));
-    }
-    B_bar.finish();
+    assert_eq!(A_kmer_count, B_kmer_count);
+    eprintln!("Canonical k-mer counts match: {}", A_kmer_count);
 
     assert_eq!(A_checksum, B_checksum);
+    eprintln!("Canonical k-mer checksums match: {:?}", A_checksum);
 
     eprintln!("Reading color sets...");
     let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
