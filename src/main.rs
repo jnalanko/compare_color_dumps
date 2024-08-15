@@ -51,7 +51,6 @@ fn read_color_sets(filename: impl AsRef<Path>, num_color_sets: usize) -> Vec<Vec
     color_sets
 }
 
-// This seems to have a bug?
 fn canonicalize_rotation_of_cyclic_unitig(unitig: &mut Vec<u8>, k: usize) {
 
     assert!(unitig.len() >= k);
@@ -230,8 +229,7 @@ fn main() {
     let B_metadata = read_metadata(format!("{}.metadata.txt", dump_B_file_prefix));
 
     eprintln!("Reading unitigs...");
-    //let A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
-    //let B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
+    // We're not canonicalizing the unitigs because the comparison algorithm works anyway.
     let A_unitigs = read_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix));
     let B_unitigs = read_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix)); 
 
