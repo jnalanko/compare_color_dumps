@@ -218,6 +218,76 @@ fn checksum_unitig_db(unitigs: &SeqDB, k: usize, ignore_non_canonical: bool) -> 
     (checksum, n_hashed)
 }
 
+fn hash_color_set(color_set: &[usize]) -> [u8; 20] {
+    let mut checksum = [0_u8; 20];
+    for color in color_set {
+        let hash = sha1(&color.to_le_bytes());
+        xor_into(&mut checksum, &hash);
+    }
+    checksum
+}
+
+fn sha1_kmer_into_color_set_hash(kmer: &[u8], color_set_hash: &[u8; 20]) -> [u8; 20] {
+    let mut hasher = Sha1::new();
+    hasher.update(kmer);
+    hasher.update(color_set_hash);
+    hasher.finalize().into()
+}
+
+// Assumes unitigs are a disjoint spectrum preserving string set (= no duplicate k-mers)
+fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20], k: usize, ignore_non_canonical: bool) -> [u8; 20] {
+
+    let n = unitig.len();
+    let unitig = unitig.to_owned();
+    let unitig_rc = reverse_complement(&unitig);
+
+    let mut checksum = [0_u8; 20];
+
+    for i in 0..(n-k+1) {
+        let fw = &unitig[i..i+k];
+        let rc = &unitig_rc[n-k-i..n-i];
+
+        let is_canonical = fw <= rc;
+        if !is_canonical && ignore_non_canonical { continue } // Canonical twin should be found somewhere else
+
+        let combined_hash = if is_canonical {
+            sha1_kmer_into_color_set_hash(fw, color_set_hash)
+        } else {
+            sha1_kmer_into_color_set_hash(rc, color_set_hash)
+        };
+        xor_into(&mut checksum, &combined_hash);
+    }
+    checksum
+}
+
+// Non-canonical ignored in A
+fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<usize>], B_color_sets: &[Vec<usize>], k: usize) {
+    eprintln!("Hashing A color sets...");
+    let A_color_set_hashes = A_color_sets.iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
+
+    eprintln!("Hashing B color sets...");
+    let B_color_set_hashes = B_color_sets.iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
+
+    let mut A_checksum = [0_u8; 20];
+    let mut B_checksum = [0_u8; 20];
+
+    eprintln!("Computing A checksum...");
+    for rec in A_unitigs.iter() {
+        let color_set_hash = A_color_set_hashes[get_color_set_id(rec.head)];
+        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, true);
+        xor_into(&mut A_checksum, &checksum);
+    }
+
+    eprintln!("Computing B checksum...");
+    for rec in B_unitigs.iter() {
+        let color_set_hash = B_color_set_hashes[get_color_set_id(rec.head)];
+        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, false);
+        xor_into(&mut B_checksum, &checksum);
+    }
+
+    assert_eq!(A_checksum, B_checksum);
+}
+
 fn main() {
     let mut args = std::env::args();
     args.next().unwrap(); // Program name
@@ -227,6 +297,8 @@ fn main() {
     eprintln!("Reading metadata...");
     let A_metadata = read_metadata(format!("{}.metadata.txt", dump_A_file_prefix));
     let B_metadata = read_metadata(format!("{}.metadata.txt", dump_B_file_prefix));
+    assert_eq!(A_metadata.k, B_metadata.k);
+    let k = A_metadata.k; 
 
     eprintln!("Reading unitigs...");
     // We're not canonicalizing the unitigs because the comparison algorithm works anyway.
@@ -247,6 +319,9 @@ fn main() {
     eprintln!("Reading color sets...");
     let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
     let B_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_B_file_prefix), B_metadata.num_color_sets);
+
+    eprintln!("Comparing k-mer color sets...");
+    compare_color_sets(&A_unitigs, &B_unitigs, &A_color_sets, &B_color_sets, k);
 
 }
 
