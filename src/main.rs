@@ -228,7 +228,7 @@ fn main() {
     let A_metadata = read_metadata(format!("{}.metadata.txt", dump_A_file_prefix));
     let B_metadata = read_metadata(format!("{}.metadata.txt", dump_B_file_prefix));
 
-    eprintln!("Reading and canonicalizing unitigs...");
+    eprintln!("Reading unitigs...");
     //let A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
     //let B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
     let A_unitigs = read_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix));
