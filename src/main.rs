@@ -210,12 +210,21 @@ fn main() {
     eprintln!("Computing k-mer checksums...");
     let mut A_checksum = [0_u8; 20];
     let mut B_checksum = [0_u8; 20];
+
+    let mut A_bar = indicatif::ProgressBar::new(A_unitigs.sequence_count() as u64);
     for unitig in A_unitigs.iter() {
+        A_bar.inc(1);
         xor_into(&mut A_checksum, &unitig_checksum(unitig.seq, A_metadata.k, true));
     }
+    A_bar.finish();
+
+
+    let mut B_bar = indicatif::ProgressBar::new(A_unitigs.sequence_count() as u64);
     for unitig in B_unitigs.iter() {
+        B_bar.inc(1);
         xor_into(&mut B_checksum, &unitig_checksum(unitig.seq, B_metadata.k, false));
     }
+    B_bar.finish();
 
     assert_eq!(A_checksum, B_checksum);
 
