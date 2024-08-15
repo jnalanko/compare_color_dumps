@@ -18,7 +18,7 @@ fn get_color_set_id(fasta_header: &[u8]) -> usize {
     let first_part = fasta_header[1..].split(|c| *c == b' ').next().unwrap();
     let mut tokens = first_part.split(|c| *c == b'=');
     assert_eq!(tokens.next().expect("Unitig id missing"), b"unitig_id");
-    ascii_to_int(tokens.next().expect("Unitig id missing"))
+    ascii_to_int(tokens.next().expect("Color id missing"))
 }
 
 fn read_color_sets(filename: impl AsRef<Path>, num_color_sets: usize) -> Vec<Vec<usize>> {
