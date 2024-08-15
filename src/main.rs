@@ -177,13 +177,15 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> [u8; 
 
     for i in 0..(n-k+1) {
         let fw = &S[i..i+k];
-        let rc = &Srev[n-k..n];
+        let rc = &Srev[n-k-i..n-i];
         let is_canonical = fw <= rc;
         if !is_canonical && ignore_non_canonical { continue }
 
         let hash = if is_canonical {
+            eprintln!("Hashing fw {}", std::str::from_utf8(fw).unwrap());
             sha1(fw)
         } else {
+            eprintln!("Hashing rc {}", std::str::from_utf8(rc).unwrap());
             sha1(rc)
         };
 
@@ -223,4 +225,26 @@ fn main() {
     let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
     let B_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_B_file_prefix), B_metadata.num_color_sets);
 
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unitig_checksum(){
+        let S = b"AACTCATACAGCTCTACTTACGACTGCGTCTACTGCTAGCTACA"; // Canonical unitig
+        let Srev = reverse_complement(S); // Non-canonical version
+
+        let k = 5;
+
+        let X = unitig_checksum(S, k, false); // Hashes the canonical version of all k-mers
+        
+        let mut Y = unitig_checksum(S, k, true); // Hashes only k-mers that are already canonical 
+        let YRev = unitig_checksum(&Srev, k, true); // Hashes only k-mers that are already canonical 
+        xor_into(&mut Y, &YRev);
+
+        assert_eq!(X, Y);
+    }
 }
