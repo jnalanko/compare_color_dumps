@@ -273,5 +273,15 @@ mod tests {
         assert_eq!(X, Y);
     }
 
+    #[test]
+    fn test_cyclic_unitig_rotation(){
+        let k = 5;
+        let mut S = b"ATCTATCGAAATCACACACTGATCT".to_vec(); // Cyclic: first (k-1)-mer is equal to last (k-1)-mer
+        canonicalize_rotation_of_cyclic_unitig(&mut S, k);
+        eprintln!("{}", std::str::from_utf8(&S).unwrap());
+
+        assert_eq!(S, b"AAATCACACACTGATCTATCGAAAT");
+    }
+
 
 }
