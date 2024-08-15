@@ -84,6 +84,10 @@ fn canonicalize_unitig(unitig: &mut Vec<u8>, k: usize) {
     }
 } 
 
+fn read_unitigs(filename: impl AsRef<Path>) -> SeqDB {
+    jseqio::reader::DynamicFastXReader::from_file(&filename).unwrap().into_db().unwrap()
+}
+
 fn read_and_canonicalize_unitigs(filename: impl AsRef<Path>, k: usize) -> SeqDB {
     let mut reader = jseqio::reader::DynamicFastXReader::from_file(&filename).unwrap();
     let mut db = jseqio::seq_db::SeqDB::new();
@@ -181,7 +185,7 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> ([u8;
         let fw = &S[i..i+k];
         let rc = &Srev[n-k-i..n-i];
         let is_canonical = fw <= rc;
-        if !is_canonical && ignore_non_canonical { continue }
+        if !is_canonical && ignore_non_canonical { continue } // Canonical twin should be found somewhere else
 
         let hash = if is_canonical {
             sha1(fw)
@@ -225,8 +229,10 @@ fn main() {
     let B_metadata = read_metadata(format!("{}.metadata.txt", dump_B_file_prefix));
 
     eprintln!("Reading and canonicalizing unitigs...");
-    let A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
-    let B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
+    //let A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
+    //let B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
+    let A_unitigs = read_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix));
+    let B_unitigs = read_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix)); 
 
     eprintln!("Computing k-mer checksums...");
 
