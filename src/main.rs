@@ -51,6 +51,7 @@ fn read_color_sets(filename: impl AsRef<Path>, num_color_sets: usize) -> Vec<Vec
     color_sets
 }
 
+// This seems to have a bug?
 fn canonicalize_rotation_of_cyclic_unitig(unitig: &mut Vec<u8>, k: usize) {
 
     assert!(unitig.len() >= k);
@@ -263,12 +264,14 @@ mod tests {
 
         let k = 5;
 
-        let X = unitig_checksum(S, k, false); // Hashes the canonical version of all k-mers
+        let (X, _) = unitig_checksum(S, k, false); // Hashes the canonical version of all k-mers
         
-        let mut Y = unitig_checksum(S, k, true); // Hashes only k-mers that are already canonical 
-        let YRev = unitig_checksum(&Srev, k, true); // Hashes only k-mers that are already canonical 
+        let (mut Y, _) = unitig_checksum(S, k, true); // Hashes only k-mers that are already canonical 
+        let (YRev, _) = unitig_checksum(&Srev, k, true); // Hashes only k-mers that are already canonical 
         xor_into(&mut Y, &YRev);
 
         assert_eq!(X, Y);
     }
+
+
 }
