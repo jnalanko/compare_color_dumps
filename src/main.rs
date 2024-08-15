@@ -3,6 +3,7 @@
 use std::{fs::File, io::{BufRead, BufReader}, path::Path};
 use jseqio::{reverse_complement, seq_db::SeqDB};
 use sha1::{Sha1, Digest};
+use rayon::prelude::*;
 
 fn ascii_to_int(ascii: &[u8]) -> usize {
     std::str::from_utf8(ascii)
@@ -263,10 +264,10 @@ fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20],
 // Non-canonical ignored in A
 fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<usize>], B_color_sets: &[Vec<usize>], k: usize) {
     eprintln!("Hashing A color sets...");
-    let A_color_set_hashes = A_color_sets.iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
+    let A_color_set_hashes = A_color_sets.par_iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
 
     eprintln!("Hashing B color sets...");
-    let B_color_set_hashes = B_color_sets.iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
+    let B_color_set_hashes = B_color_sets.par_iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
 
     let mut A_checksum = [0_u8; 20];
     let mut B_checksum = [0_u8; 20];
