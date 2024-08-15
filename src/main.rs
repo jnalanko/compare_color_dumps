@@ -204,11 +204,20 @@ fn main() {
     let B_metadata = read_metadata(format!("{}.metadata.txt", dump_B_file_prefix));
 
     eprintln!("Reading and canonicalizing unitigs...");
-    let mut A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
-    let mut B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
+    let A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
+    let B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
 
-    eprintln!("Computing unitig checksums...");
-    // Code here
+    eprintln!("Computing k-mer checksums...");
+    let mut A_checksum = [0_u8; 20];
+    let mut B_checksum = [0_u8; 20];
+    for unitig in A_unitigs.iter() {
+        xor_into(&mut A_checksum, &unitig_checksum(unitig.seq, A_metadata.k, true));
+    }
+    for unitig in B_unitigs.iter() {
+        xor_into(&mut B_checksum, &unitig_checksum(unitig.seq, B_metadata.k, false));
+    }
+
+    assert_eq!(A_checksum, B_checksum);
 
     eprintln!("Reading color sets...");
     let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
