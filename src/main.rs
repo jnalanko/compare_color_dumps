@@ -30,6 +30,7 @@ fn read_color_sets(filename: impl AsRef<Path>, num_color_sets: usize) -> Vec<Vec
     let mut reader = BufReader::new(File::open(filename).unwrap());
     let mut line = String::new();
 
+    let bar = indicatif::ProgressBar::new(num_color_sets as u64);
     while reader.read_line(&mut line).unwrap() > 0 {
         let line_bytes = line.trim_end().as_bytes();
         let mut tokens = line_bytes.split(|c| *c == b' ');
@@ -47,7 +48,9 @@ fn read_color_sets(filename: impl AsRef<Path>, num_color_sets: usize) -> Vec<Vec
         assert_eq!(color_sets[color_set_id].len(), list_len);
 
         line.clear();
+        bar.inc(1);
     }
+    bar.finish();
 
     color_sets
 }
@@ -273,18 +276,24 @@ fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<
     let mut B_checksum = [0_u8; 20];
 
     eprintln!("Computing A checksum...");
+    let A_bar = indicatif::ProgressBar::new(A_unitigs.sequence_count() as u64);
     for rec in A_unitigs.iter() {
         let color_set_hash = A_color_set_hashes[get_color_set_id(rec.head)];
         let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, true);
         xor_into(&mut A_checksum, &checksum);
+        A_bar.inc(1);
     }
+    A_bar.finish();
 
     eprintln!("Computing B checksum...");
+    let B_bar = indicatif::ProgressBar::new(B_unitigs.sequence_count() as u64);
     for rec in B_unitigs.iter() {
         let color_set_hash = B_color_set_hashes[get_color_set_id(rec.head)];
         let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, false);
         xor_into(&mut B_checksum, &checksum);
+        B_bar.inc(1);
     }
+    B_bar.finish();
 
     assert_eq!(A_checksum, B_checksum);
     println!("Checksums match: {:?}", A_checksum);
