@@ -287,6 +287,7 @@ fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<
     }
 
     assert_eq!(A_checksum, B_checksum);
+    println!("Checksums match: {:?}", A_checksum);
 }
 
 fn main() {
