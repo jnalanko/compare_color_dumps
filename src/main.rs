@@ -1,5 +1,8 @@
-use std::{collections::HashMap, fs::File, io::{BufRead, BufReader}, path::Path};
-use jseqio::{record::Record, seq_db::SeqDB};
+#![allow(non_snake_case)]
+
+use std::{fs::File, io::{BufRead, BufReader}, path::Path};
+use jseqio::{reverse_complement, seq_db::SeqDB};
+use sha1::{Sha1, Digest};
 
 fn ascii_to_int(ascii: &[u8]) -> usize {
     std::str::from_utf8(ascii)
@@ -148,6 +151,48 @@ fn read_metadata(filename: impl AsRef<Path>) -> Metadata {
 
 }
 
+fn sha1(data: &[u8]) -> [u8; 20] {
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    hasher.finalize().into()
+}
+
+fn xor_into<const N: usize>(target: &mut[u8; N], other: &[u8; N]) {
+    for i in 0..N {
+        target[i] ^= other[i];
+    }
+}
+
+// This should only be called for odd k because otherwise the rev. comp. of a k-mer may be equal to itself
+fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> [u8; 20] {
+    let S = unitig.to_vec();
+    let Srev = reverse_complement(unitig);
+
+    let n = S.len();
+    assert!(n >= k);
+    assert!(Srev.len() == n);
+    assert!(k % 2 == 1); // Only works for odd k
+
+    let mut checksum = [0_u8; 20];
+
+    for i in 0..(n-k+1) {
+        let fw = &S[i..i+k];
+        let rc = &Srev[n-k..n];
+        let is_canonical = fw <= rc;
+        if !is_canonical && ignore_non_canonical { continue }
+
+        let hash = if is_canonical {
+            sha1(fw)
+        } else {
+            sha1(rc)
+        };
+
+        xor_into(&mut checksum, &hash);
+    }
+
+    checksum
+}
+
 fn main() {
     let mut args = std::env::args();
     args.next().unwrap(); // Program name
@@ -161,6 +206,9 @@ fn main() {
     eprintln!("Reading and canonicalizing unitigs...");
     let mut A_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_A_file_prefix), A_metadata.k);
     let mut B_unitigs = read_and_canonicalize_unitigs(format!("{}.unitigs.fa", dump_B_file_prefix), B_metadata.k);
+
+    eprintln!("Computing unitig checksums...");
+    // Code here
 
     eprintln!("Reading color sets...");
     let A_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_A_file_prefix), A_metadata.num_color_sets);
