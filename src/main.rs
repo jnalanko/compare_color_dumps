@@ -182,10 +182,8 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> [u8; 
         if !is_canonical && ignore_non_canonical { continue }
 
         let hash = if is_canonical {
-            eprintln!("Hashing fw {}", std::str::from_utf8(fw).unwrap());
             sha1(fw)
         } else {
-            eprintln!("Hashing rc {}", std::str::from_utf8(rc).unwrap());
             sha1(rc)
         };
 
