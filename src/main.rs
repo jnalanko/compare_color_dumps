@@ -294,6 +294,8 @@ fn main() {
     args.next().unwrap(); // Program name
     let dump_A_file_prefix = args.next().unwrap();
     let dump_B_file_prefix = args.next().unwrap();
+    let A_canonical: u8 = args.next().unwrap().parse::<u8>().unwrap(); // Really a bool: "0" or "1"
+    let B_canonical: u8 = args.next().unwrap().parse::<u8>().unwrap(); // Really a bool: "0" or "1"
 
     eprintln!("Reading metadata...");
     let A_metadata = read_metadata(format!("{}.metadata.txt", dump_A_file_prefix));
@@ -308,8 +310,8 @@ fn main() {
 
     eprintln!("Computing k-mer checksums...");
 
-    let (A_checksum, A_kmer_count) = &checksum_unitig_db(&A_unitigs, A_metadata.k, true);
-    let (B_checksum, B_kmer_count) = &checksum_unitig_db(&B_unitigs, B_metadata.k, false);
+    let (A_checksum, A_kmer_count) = &checksum_unitig_db(&A_unitigs, A_metadata.k, A_canonical != 0);
+    let (B_checksum, B_kmer_count) = &checksum_unitig_db(&B_unitigs, B_metadata.k, B_canonical != 0);
 
     assert_eq!(A_kmer_count, B_kmer_count);
     eprintln!("Canonical k-mer counts match: {}", A_kmer_count);
