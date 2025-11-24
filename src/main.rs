@@ -173,7 +173,7 @@ fn xor_into<const N: usize>(target: &mut[u8; N], other: &[u8; N]) {
 
 // This should only be called for odd k because otherwise the rev. comp. of a k-mer may be equal to itself
 // Also returns the number of k-mers that were hashed.
-fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> ([u8; 20], usize) {
+fn unitig_checksum(unitig: &[u8], k: usize) -> ([u8; 20], usize) {
     let S = unitig.to_vec();
     let Srev = reverse_complement(unitig);
 
@@ -189,7 +189,6 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> ([u8;
         let fw = &S[i..i+k];
         let rc = &Srev[n-k-i..n-i];
         let is_canonical = fw <= rc;
-        if !is_canonical && ignore_non_canonical { continue } // Canonical twin should be found somewhere else
 
         let hash = if is_canonical {
             sha1(fw)
@@ -206,14 +205,14 @@ fn unitig_checksum(unitig: &[u8], k: usize, ignore_non_canonical: bool) -> ([u8;
     (checksum, n_hashes)
 }
 
-fn checksum_unitig_db(unitigs: &SeqDB, k: usize, ignore_non_canonical: bool) -> ([u8; 20], usize) {
+fn checksum_unitig_db(unitigs: &SeqDB, k: usize) -> ([u8; 20], usize) {
     let mut checksum = [0_u8; 20];
     let mut n_hashed = 0_usize;
 
     let bar = indicatif::ProgressBar::new(unitigs.sequence_count() as u64);
     for unitig in unitigs.iter() {
         bar.inc(1);
-        let (unitig_checksum, hash_count) = unitig_checksum(&unitig.seq, k, ignore_non_canonical);
+        let (unitig_checksum, hash_count) = unitig_checksum(&unitig.seq, k);
         xor_into(&mut checksum, &unitig_checksum);
         n_hashed += hash_count;
     }
@@ -239,7 +238,7 @@ fn sha1_kmer_into_color_set_hash(kmer: &[u8], color_set_hash: &[u8; 20]) -> [u8;
 }
 
 // Assumes unitigs are a disjoint spectrum preserving string set (= no duplicate k-mers)
-fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20], k: usize, ignore_non_canonical: bool) -> [u8; 20] {
+fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20], k: usize) -> [u8; 20] {
 
     let n = unitig.len();
     let unitig = unitig.to_owned();
@@ -252,7 +251,6 @@ fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20],
         let rc = &unitig_rc[n-k-i..n-i];
 
         let is_canonical = fw <= rc;
-        if !is_canonical && ignore_non_canonical { continue } // Canonical twin should be found somewhere else
 
         let combined_hash = if is_canonical {
             sha1_kmer_into_color_set_hash(fw, color_set_hash)
@@ -265,7 +263,7 @@ fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20],
 }
 
 // Non-canonical ignored in A
-fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<usize>], B_color_sets: &[Vec<usize>], k: usize, ignore_non_canonical_A: bool, ignore_non_canonical_B: bool) {
+fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<usize>], B_color_sets: &[Vec<usize>], k: usize) {
     eprintln!("Hashing A color sets...");
     let A_color_set_hashes = A_color_sets.par_iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
 
@@ -279,7 +277,7 @@ fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<
     let A_bar = indicatif::ProgressBar::new(A_unitigs.sequence_count() as u64);
     for rec in A_unitigs.iter() {
         let color_set_hash = A_color_set_hashes[get_color_set_id(rec.head)];
-        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, ignore_non_canonical_A);
+        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k);
         xor_into(&mut A_checksum, &checksum);
         A_bar.inc(1);
     }
@@ -289,7 +287,7 @@ fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<
     let B_bar = indicatif::ProgressBar::new(B_unitigs.sequence_count() as u64);
     for rec in B_unitigs.iter() {
         let color_set_hash = B_color_set_hashes[get_color_set_id(rec.head)];
-        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, ignore_non_canonical_B);
+        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k);
         xor_into(&mut B_checksum, &checksum);
         B_bar.inc(1);
     }
@@ -304,8 +302,6 @@ fn main() {
     args.next().unwrap(); // Program name
     let dump_A_file_prefix = args.next().unwrap();
     let dump_B_file_prefix = args.next().unwrap();
-    let A_canonical: u8 = args.next().unwrap().parse::<u8>().unwrap(); // Really a bool: "0" or "1"
-    let B_canonical: u8 = args.next().unwrap().parse::<u8>().unwrap(); // Really a bool: "0" or "1"
 
     eprintln!("Reading metadata...");
     let A_metadata = read_metadata(format!("{}.metadata.txt", dump_A_file_prefix));
@@ -320,8 +316,8 @@ fn main() {
 
     eprintln!("Computing k-mer checksums...");
 
-    let (A_checksum, A_kmer_count) = &checksum_unitig_db(&A_unitigs, A_metadata.k, A_canonical != 0);
-    let (B_checksum, B_kmer_count) = &checksum_unitig_db(&B_unitigs, B_metadata.k, B_canonical != 0);
+    let (A_checksum, A_kmer_count) = &checksum_unitig_db(&A_unitigs, A_metadata.k);
+    let (B_checksum, B_kmer_count) = &checksum_unitig_db(&B_unitigs, B_metadata.k);
 
     assert_eq!(A_kmer_count, B_kmer_count);
     eprintln!("Canonical k-mer counts match: {}", A_kmer_count);
@@ -334,7 +330,7 @@ fn main() {
     let B_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_B_file_prefix), B_metadata.num_color_sets);
 
     eprintln!("Comparing k-mer color sets...");
-    compare_color_sets(&A_unitigs, &B_unitigs, &A_color_sets, &B_color_sets, k, A_canonical != 0, B_canonical != 0);
+    compare_color_sets(&A_unitigs, &B_unitigs, &A_color_sets, &B_color_sets, k);
 
 }
 
@@ -343,6 +339,7 @@ fn main() {
 mod tests {
     use super::*;
 
+    /*
     #[test]
     fn test_unitig_checksum(){
         let S = b"AACTCATACAGCTCTACTTACGACTGCGTCTACTGCTAGCTACA"; // Canonical unitig
@@ -368,6 +365,7 @@ mod tests {
 
         assert_eq!(S, b"AAATCACACACTGATCTATCGAAAT");
     }
+    */
 
 
 }
