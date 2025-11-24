@@ -265,7 +265,7 @@ fn checksum_unitig_kmers_and_colorsets(unitig: &[u8], color_set_hash: &[u8; 20],
 }
 
 // Non-canonical ignored in A
-fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<usize>], B_color_sets: &[Vec<usize>], k: usize) {
+fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<usize>], B_color_sets: &[Vec<usize>], k: usize, ignore_non_canonical_A: bool, ignore_non_canonical_B: bool) {
     eprintln!("Hashing A color sets...");
     let A_color_set_hashes = A_color_sets.par_iter().map(|color_set| hash_color_set(color_set)).collect::<Vec<_>>();
 
@@ -279,7 +279,7 @@ fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<
     let A_bar = indicatif::ProgressBar::new(A_unitigs.sequence_count() as u64);
     for rec in A_unitigs.iter() {
         let color_set_hash = A_color_set_hashes[get_color_set_id(rec.head)];
-        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, true);
+        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, ignore_non_canonical_A);
         xor_into(&mut A_checksum, &checksum);
         A_bar.inc(1);
     }
@@ -289,7 +289,7 @@ fn compare_color_sets(A_unitigs: &SeqDB, B_unitigs: &SeqDB, A_color_sets: &[Vec<
     let B_bar = indicatif::ProgressBar::new(B_unitigs.sequence_count() as u64);
     for rec in B_unitigs.iter() {
         let color_set_hash = B_color_set_hashes[get_color_set_id(rec.head)];
-        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, false);
+        let checksum = checksum_unitig_kmers_and_colorsets(rec.seq, &color_set_hash, k, ignore_non_canonical_B);
         xor_into(&mut B_checksum, &checksum);
         B_bar.inc(1);
     }
@@ -334,7 +334,7 @@ fn main() {
     let B_color_sets = read_color_sets(format!("{}.color_sets.txt", dump_B_file_prefix), B_metadata.num_color_sets);
 
     eprintln!("Comparing k-mer color sets...");
-    compare_color_sets(&A_unitigs, &B_unitigs, &A_color_sets, &B_color_sets, k);
+    compare_color_sets(&A_unitigs, &B_unitigs, &A_color_sets, &B_color_sets, k, A_canonical != 0, B_canonical != 0);
 
 }
 
